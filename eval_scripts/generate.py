@@ -11,6 +11,7 @@ from models_catalog import models
 from tqdm import tqdm
 import warnings
 import json
+import numpy as np
 
 parser = argparse.ArgumentParser(description="Generate images with a trained model.")
 # Checkpoint params
@@ -23,7 +24,7 @@ parser.add_argument("--use_latest_checkpoint", action="store_true", help="Whethe
 # Sampling params
 parser.add_argument("--num_images", type=int, help="Number of images to generate.", default=50000)
 parser.add_argument("--batch_size", type=int, help="Batch size for generation.", default=16)
-parser.add_argument("--num_inference_steps", type=int, help="Number of inference steps.", default=25)
+parser.add_argument("--num_inference_steps", type=int, help="Number of inference steps.", default=50)
 parser.add_argument("--early_stop_generation", action="store_true", help="Whether to stop generation early.", default=False)
 parser.add_argument("--captions_loc", type=str, help="If specified, prompts will be loaded from file.", default=None)
 
@@ -63,8 +64,8 @@ def main(args):
 
     if args.use_latest_checkpoint and args.ckpt_path is not None:
         checkpoint_numbers = [int(f.split('-')[-1]) for f in os.listdir(args.ckpt_path) if "checkpoint-" in f]
-        max_number = str(sorted(checkpoint_numbers)[-1]).zfill(6)
-        args.ckpt_path = os.path.join(args.ckpt_path, "checkpoint-" + max_number)
+        checkpoint_index = np.argsort(checkpoint_numbers)[-1]
+        args.ckpt_path = os.path.join(args.ckpt_path, os.listdir(args.ckpt_path)[checkpoint_index])
 
     if args.ckpt_path is not None:
         ambient_utils.dist.print0(f"Working with checkpoint path: {args.ckpt_path}")
@@ -78,10 +79,6 @@ def main(args):
     pipe = ambient_utils.diffusers_utils.load_model(args.ckpt_path, args.vae_path, args.sdxl_path, args.trained_with_lora)
 
     pipe = pipe.to("cuda")
-    if args.timestep_nature is not None and args.early_stop_generation:
-        stop_index = args.timestep_nature
-    else:
-        stop_index = None
 
     generator = torch.Generator(device="cuda").manual_seed(args.seed + ambient_utils.dist.get_rank())
     for image_indices in tqdm(args.rank_batches, disable=ambient_utils.dist.get_rank() != 0):
