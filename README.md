@@ -12,14 +12,10 @@ Authored by: Giannis Daras, Alexandros G. Dimakis, Constantinos Daskalakis
 To train with linearly corrupted data, see Ambient Diffusion ([\[code\]](https://github.com/giannisdaras/ambient-diffusion), [\[paper\]](https://arxiv.org/abs/2305.19256)).
 
 
-<u> Abstract </u>: *Ambient diffusion is a recently proposed framework for training diffusion models using corrupted data. Both Ambient Diffusion and alternative SURE-based approaches for learning diffusion models from corrupted data resort to approximations which deteriorate performance. We present the first framework for training diffusion models that provably sample from the uncorrupted distribution given only noisy training data, solving an open problem in Ambient diffusion. Our key technical contribution is a method that uses a double application of Tweedie's formula and a consistency loss function that allows us to extend sampling at noise levels below the observed data noise. We also provide further evidence that diffusion models memorize from their training sets by identifying extremely corrupted images that are almost perfectly reconstructed, raising copyright and privacy concerns. Our method for training using corrupted samples can be used to mitigate this problem.
- We demonstrate this by fine-tuning Stable Diffusion XL to generate samples from a distribution using only noisy samples. Our framework reduces the amount of memorization of the fine-tuning dataset, while maintaining competitive performance.*
-
-
 ### Example Training Data
 ![](figures/corrupted_data.png)
 
-### Generated images:
+### Generated images
 ![](figures/high_level_with_consistency.png)
 
 
@@ -55,15 +51,20 @@ This command will take a few minutes to complete.
 
 Alternatively, you can skip this step and use your own datasets or datasets from `datasets`.
 
-## Attacks
+## Identifying memorized examples
 
-### Noise Attack
+In this section, we use a pre-trained Stable Diffusion XL to identify memorized examples from LAION-10k. The dataset of SDXL is not known, but in the paper we show strong evidence that the SDXL model has seen images from LAION.
+
+Our attack works by severy corrupting images from LAION and then using the SDXL model to restore them. If the model is able to perfectly restore images under severe corruption, then it is likely that the model has seen the images during training.
+
+We consider two types of corruption: additive Gaussian noise and masking. To launch the additive Gaussian noise attack, run the following command:
 
 ```bash
 python attack_scripts/attack_with_noise.py --whole_pipeline
 ```
 
-### Inpainting Attack
+To launch the masking attack, run the following command:
+
 ```bash
 python attack_scripts/attack_with_masking.py --mask_with_yolo
 ```
