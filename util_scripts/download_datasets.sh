@@ -5,10 +5,10 @@ cd $BASE_PATH/datasets  # move to datasets folder
 # ------- LAION-10k subset --------- #
 gdown --id 1lUUzhq9yK1YOWJePm12GeJgsUtCfpm_o  # images
 gdown --id 1svzxtGgJRtCyWNW6pQPNGSDkhuDifTzn  # captions
+gdown --id 1TAxFU_i102ZGuWm3LUrYM0nn_mX28Ab4  # precomputed LAION features
 unzip train.zip # unzip LAION images
 mkdir -p laion-10k # create dir
 mv train/images_large/* laion-10k/ # move to appropriate folder
-mv 
 rm -rf train/ # clean files
 rm -rf train.zip # clean files
 
