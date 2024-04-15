@@ -199,7 +199,7 @@ def main(opt):
             tiled_img = ambient_utils.tile_image(torch.cat([img, x0_pred_mmse, x0_pred], dim=0), n=1, m=2 + opt.attempts)
             for attempt_id, pred in enumerate(x0_pred):
                 ambient_utils.save_image(pred, os.path.join(opt.outdir, f"{file_id_no_ext}_output_{attempt_id}.png"))
-            ambient_utils.save_image(tiled_img, os.path.join(opt.outdir, f"{file_id_no_ext}_tiled.png"), save_wandb=True, wandb_down_factor=4)
+            ambient_utils.save_image(tiled_img, os.path.join(opt.outdir, f"{file_id_no_ext}_tiled_0.png"), save_wandb=True, wandb_down_factor=4)
 
 if __name__ == "__main__":
     opt = parser.parse_args()
