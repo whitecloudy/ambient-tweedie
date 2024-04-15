@@ -66,6 +66,7 @@ python attack_scripts/attack_with_noise.py --whole_pipeline
 As this script runs, it will log the images in a wandb project. The images will be logged as triplets of (original image, one step denoised image, final denoised image). Here is an example:
 
 ![](figures/example_noisy.png)
+
 The results are logged by default in the folder "$BASE_PATH/xl_noise_attack/".
 If the final denoised image is very close to the original image, then the model has likely seen the image during training. 
 
@@ -93,6 +94,7 @@ python attack_scripts/attack_with_masking.py --mask_with_yolo
 Again, as this script runs, it will log the images in a wandb project. The images will be logged as triplets of (original image, masked image, reconstructed image). Here is an example:
 
 ![](figures/example_masked.png)
+
 The results are logged by default in the folder "$BASE_PATH/xl_masking_attack/".
 If the reconstructed image is very close to the original image, then the model has likely seen the image during training. 
 
