@@ -36,8 +36,15 @@ The next step is to set some environmental variables. For your convenience, you 
 ```bash
 source .env
 ```
-
 Remember to update the `.env` file with the correct paths.
+
+
+[Not Recommended]: **Installation using pip**: If you have already an environment setup and you only want to install the project specific dependencies, you can do so by running the following command:
+
+```bash
+pip install gdown invisible_watermark transformers accelerate safetensors datasets peft wandb imageio s3fs seaborn plotly opencv-python==4.8.0.74 webdataset git+https://github.com/giannisdaras/ambient_utils.git git+https://github.com/huggingface/diffusers.git 
+```
+
 
 
 ### Download datasets
@@ -75,6 +82,7 @@ After the attack is complete, you can run the following command to filter the re
 ```bash
 python eval_scripts/filter_results_noise.py --data=$LAION_RAW_DATA --normalize=True
 ```
+
 The script will log the top matches in a wandb project. It will further output a json file `top_matches.json` in the following format:
 ```python
 state_dict = {
