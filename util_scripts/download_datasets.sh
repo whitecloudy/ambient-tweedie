@@ -13,6 +13,16 @@ rm -rf train/ # clean files
 rm -rf train.zip # clean files
 
 
+wget https://github.com/NVlabs/edm/raw/main/dataset_tool.py
+echo "Resizing LAION-10k to 1024x1024"
+python dataset_tool.py --source=laion-10k --dest=laion-10k-resized --resolution=1024x1024
+mv laion-10k-resized/*/*.png laion-10k-resized/ # move all images to the same folder
+find laion-10k-resized/ -mindepth 1 -type d -exec rm -r {} +  # delete empty folders
+cd laion-10k-resized/
+for f in img000*.png; do mv "$f" "${f:5}"; done  # rename files to be consistent with laion-10k.
+cd ..
+
+
 # ------- CelebA-HQ --------- #
 mkdir -p celeba_hq
 mkdir -p download_scripts
