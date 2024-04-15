@@ -1,11 +1,10 @@
-import dnnlib
-from dnnlib.util import load_image, pad_image
+from ambient_utils import dist
+from ambient_utils import EasyDict
+from ambient_utils import pad_image
+from ambient_utils import is_file
 import click
 import torch
-from torch_utils import misc
-from torch_utils import distributed as dist
 from tqdm import tqdm
-from dnnlib.util import pad_image, is_file, save_image
 import numpy as np
 from tqdm import tqdm
 import os
@@ -57,14 +56,11 @@ def extract_features(feature_extractor, images, masks=None, localized_features=T
         local_features = feature_extractor(images)
         return local_features.to(return_device)
 
-def img_number_to_dataset_filename(file_index, files_per_folder=1000):
-    folder_index = str(file_index // files_per_folder).zfill(5)
-    file_index = str(file_index).zfill(8)
-    matched_filename = folder_index + "/" + "img" + file_index + ".png"
-    return matched_filename
+def img_number_to_dataset_filename(filename):
+    return filename.split("_")[0].zfill(6) + ".png"
 
-def img_number_to_mask_filename(file_index):
-    return str(file_index).zfill(6) + "_mask.png"
+def img_number_to_mask_filename(filename):
+    return filename.split("_")[0].zfill(6) + "_mask.png"
 
 def match_indices_between_datasets(dataset1, dataset2, indices, name_mapping_fn):
     """Matches indices between two datasets.
@@ -79,15 +75,14 @@ def match_indices_between_datasets(dataset1, dataset2, indices, name_mapping_fn)
     
     for index in indices:
         filename = dataset1[index]['filename']
-        file_index = int(filename.split("_")[0])
-        matched_filename = name_mapping_fn(file_index)
+        matched_filename = name_mapping_fn(filename)
         matched_indices.append(dataset2.get_by_filename(matched_filename)["raw_idx"])
     return matched_indices
 
 @click.command()
-@click.option('--input_dir', 'input_dir',  help='Location of the folder where the network outputs are stored', metavar='PATH|URL',   type=str, required=True)
-@click.option('--output_dir', 'output_dir',  help='Location of the folder where the outputs should be stored', metavar='PATH|URL',   type=str, required=True)
-@click.option('--features_path', help='Path to save/load dataset features from', metavar='PATH|URL', type=str, required=True)
+@click.option('--input_dir', 'input_dir',  help='Location of the folder where the network outputs are stored', metavar='PATH|URL',   type=str, default="$BASE_PATH/xl_masking_attack/")
+@click.option('--output_dir', 'output_dir',  help='Location of the folder where the outputs should be stored', metavar='PATH|URL',   type=str, default="$BASE_PATH/xl_masking_attack_matches/")
+@click.option('--features_path', help='Path to save/load dataset features from', metavar='PATH|URL', type=str, default="$LAION_FEATURES_LOCALIZED")
 @click.option('--data',          help='Path to the dataset', metavar='ZIP|DIR',                     type=str, required=True)
 @click.option('--max_size', help='Limit training samples.', type=int, default=None, show_default=True)
 @click.option('--cache',         help='Cache dataset in CPU memory', metavar='BOOL',                type=bool, default=True, show_default=True)
@@ -102,7 +97,7 @@ def match_indices_between_datasets(dataset1, dataset2, indices, name_mapping_fn)
 @click.option('--localized_features', help='Whether to use localized features', metavar='BOOL', type=bool, default=True, show_default=True)
 @click.option('--skip_calculation', help='Whether to skip the calculation of the products. If True, products will be loaded from disk.', metavar='BOOL', type=bool, default=False, show_default=False)
 @click.option('--enable_wandb', help='Whether to enable wandb logging', metavar='BOOL', type=bool, default=True, show_default=False)
-@click.option('--expr_id', help='Experiment id', type=str, default="noise_attack_filtering", show_default=False)
+@click.option('--expr_id', help='Experiment id', type=str, default="noise_mask_filtering", show_default=False)
 
 def main(input_dir, output_dir, features_path, data, max_size, cache, workers, batch, batch_gpu, 
          seed, normalize, min_mask_ratio, top_k, size_for_feature_extraction, localized_features, 
@@ -110,6 +105,12 @@ def main(input_dir, output_dir, features_path, data, max_size, cache, workers, b
     
     torch.multiprocessing.set_start_method('spawn')
     dist.init()
+
+    # expand_vars
+    vars_to_be_expanded = {"input_dir": input_dir, "output_dir": output_dir, "features_path": features_path}
+    vars_to_be_expanded = ambient_utils.expand_vars(vars_to_be_expanded)
+    input_dir, output_dir, features_path = vars_to_be_expanded["input_dir"], vars_to_be_expanded["output_dir"], vars_to_be_expanded["features_path"]
+
 
     if enable_wandb and dist.get_rank() == 0:
         wandb.init(project="ambient", name=expr_id)
@@ -126,7 +127,7 @@ def main(input_dir, output_dir, features_path, data, max_size, cache, workers, b
         batch_gpu = batch_gpu_total
     
 
-    c = dnnlib.EasyDict()
+    c = EasyDict()
 
     dataset_obj = ambient_utils.dataset_utils.ImageFolderDataset(path=data, use_labels=False, xflip=False, cache=cache, 
                                         corruption_probability=0.0, delta_probability=0.0, resolution=1024)
@@ -137,7 +138,7 @@ def main(input_dir, output_dir, features_path, data, max_size, cache, workers, b
     if not is_file(features_path):
         dist.print0("Computing dataset embeddings..")
 
-        c.data_loader_kwargs = dnnlib.EasyDict(pin_memory=True, num_workers=workers, prefetch_factor=2)
+        c.data_loader_kwargs = EasyDict(pin_memory=True, num_workers=workers, prefetch_factor=2)
         dataset_sampler = torch.utils.data.distributed.DistributedSampler(dataset_obj, num_replicas=dist.get_world_size(), rank=dist.get_rank(), seed=seed, shuffle=False)
 
         dataset_iterator = iter(
@@ -163,6 +164,7 @@ def main(input_dir, output_dir, features_path, data, max_size, cache, workers, b
         features = np.concatenate(features)
         np.save(features_path, features)
     else:
+        dist.print0("Loading pre-computed features.")
         features = np.load(features_path)
 
 
@@ -263,15 +265,17 @@ def main(input_dir, output_dir, features_path, data, max_size, cache, workers, b
 
     # make the indices relative to the generated dataset and keep only the top-k ones
     top_k_indices = [kept_indices[i] for i in top_indices_from_computed[:top_k]]
-    
+        
     # find images that correspond to the highest products
     top_images = [torch.tensor(outputs_dataset_obj[index]['image']) for index in top_k_indices]
-
+    
+    
     top_k_dataset_indices = match_indices_between_datasets(outputs_dataset_obj, dataset_obj, top_k_indices, 
                                                            img_number_to_dataset_filename)    
     # find dataset images that correspond to the highest products
     top_dataset_images = [torch.tensor(dataset_obj[index]['image']) for index in top_k_dataset_indices]
     
+
     top_k_mask_indices = match_indices_between_datasets(outputs_dataset_obj, masks_dataset_obj, top_k_indices, img_number_to_mask_filename)
     top_masks = [torch.tensor(masks_dataset_obj[index]['image']) for index in top_k_mask_indices]
     
@@ -290,7 +294,12 @@ def main(input_dir, output_dir, features_path, data, max_size, cache, workers, b
     top_masked_images = torch.nn.functional.interpolate(top_masked_images, size=(min_resolution, min_resolution), mode='bilinear', align_corners=False)
     top_dataset_images = torch.nn.functional.interpolate(top_dataset_images, size=(min_resolution, min_resolution), mode='bilinear', align_corners=False)
     cat_images = torch.cat((top_dataset_images, top_masked_images, top_images), dim=0) * 2 - 1
-    save_image(ambient_utils.tile_image(cat_images, n=3, m=top_k), os.path.join(output_dir, 'top_images.png'))
+
+    ambient_utils.save_images(cat_images, os.path.join(output_dir, "top_matches.png"), 
+                              num_rows=3, 
+                              save_wandb=True, down_factor=8)
+
+
 
 if __name__ == '__main__':
     main()

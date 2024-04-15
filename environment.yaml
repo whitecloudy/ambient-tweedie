@@ -20,5 +20,6 @@ dependencies:
     - s3fs
     - seaborn
     - plotly
+    - opencv-python=4.8.0.74
     - git+https://github.com/giannisdaras/ambient_utils.git
     - git+https://github.com/huggingface/diffusers.git

@@ -1,12 +1,11 @@
-import dnnlib
-from dnnlib.util import load_image, pad_image
 import click
 import torch
-from torch_utils import misc
-from torch_utils import distributed as dist
+from ambient_utils import dist
+from ambient_utils import EasyDict
+from ambient_utils import pad_image
+from ambient_utils import is_file
 from tqdm import tqdm
-from dnnlib.util import pad_image, is_file, save_image
-import numpy as np
+import numpy as np  
 from tqdm import tqdm
 import os
 import pickle
@@ -15,7 +14,7 @@ import ambient_utils
 import wandb
 import seaborn as sns
 import json
-import copy
+
 
 def load_captions(captions_loc):
     with open(captions_loc) as f:
@@ -25,9 +24,9 @@ def load_captions(captions_loc):
     return captions
 
 @click.command()
-@click.option('--input_dir', 'input_dir',  help='Location of the folder where the network outputs are stored', metavar='PATH|URL',   type=str, required=True)
-@click.option('--output_dir', 'output_dir',  help='Location of the folder where the outputs should be stored', metavar='PATH|URL',   type=str, required=True)
-@click.option('--features_path', help='Path to save/load dataset features from', metavar='PATH|URL', type=str, required=True)
+@click.option('--input_dir', 'input_dir',  help='Location of the folder where the network outputs are stored', metavar='PATH|URL',   type=str, default="$BASE_PATH/xl_noise_attack/")
+@click.option('--output_dir', 'output_dir',  help='Location of the folder where the outputs should be stored', metavar='PATH|URL',   type=str, default="$BASE_PATH/xl_noise_attack_matches/")
+@click.option('--features_path', help='Path to save/load dataset features from', metavar='PATH|URL', type=str, default="$LAION_FEATURES_PATH")
 @click.option('--captions_loc', help='Location of the captions file', metavar='PATH|URL', type=str, default=None, show_default=True)
 @click.option('--use_cls', help='Whether to use CLS token', metavar='BOOL', type=bool, default=True, show_default=True)
 @click.option('--data',          help='Path to the dataset', metavar='ZIP|DIR',                     type=str, required=True)
@@ -53,6 +52,10 @@ def main(input_dir, output_dir, features_path, captions_loc, use_cls, data, max_
     torch.multiprocessing.set_start_method('spawn')
     dist.init()
 
+    # expand_vars
+    vars_to_be_expanded = {"input_dir": input_dir, "output_dir": output_dir, "features_path": features_path, "captions_loc": captions_loc}
+    vars_to_be_expanded = ambient_utils.expand_vars(vars_to_be_expanded)
+    input_dir, output_dir, features_path, captions_loc = vars_to_be_expanded["input_dir"], vars_to_be_expanded["output_dir"], vars_to_be_expanded["features_path"], vars_to_be_expanded["captions_loc"]
 
     if enable_wandb and dist.get_rank() == 0:
         wandb.init(project="ambient", name=expr_id)
@@ -69,7 +72,7 @@ def main(input_dir, output_dir, features_path, captions_loc, use_cls, data, max_
         batch_gpu = batch_gpu_total
     
 
-    c = dnnlib.EasyDict()
+    c = EasyDict()
     
     if not skip_calculation:
         dist.print0("Loading feature extractor...")
@@ -82,7 +85,7 @@ def main(input_dir, output_dir, features_path, captions_loc, use_cls, data, max_
                                             corruption_probability=0.0, delta_probability=0.0, resolution=1024)
         dist.print0("Computing dataset embeddings..")
 
-        c.data_loader_kwargs = dnnlib.EasyDict(pin_memory=True, num_workers=workers, prefetch_factor=2)
+        c.data_loader_kwargs = EasyDict(pin_memory=True, num_workers=workers, prefetch_factor=2)
         dataset_sampler = torch.utils.data.distributed.DistributedSampler(dataset_obj, num_replicas=dist.get_world_size(), rank=dist.get_rank(), seed=seed, shuffle=False)
 
         dataset_iterator = iter(
@@ -232,17 +235,15 @@ def main(input_dir, output_dir, features_path, captions_loc, use_cls, data, max_
     gen_filenames = [item['filename'] for item in dataset_items]
     dist.print0("Top filenames in generated dataset: ", base_filenames)
 
-
-
     if not flag_diff_names:
         # load tiled images
-        top_mmse_images = [2 * ambient_utils.load_image(os.path.join(input_dir, base_filename + "_tiled.png"))[:, :, :, 1024:2048] - 1 for base_filename in base_filenames]
+        top_mmse_images = [2 * ambient_utils.load_image(os.path.join(input_dir, base_filename + "_tiled_0.png"))[:, :, :, 1024:2048] - 1 for base_filename in base_filenames]
         top_mmse_images = torch.cat(top_mmse_images)
 
 
     # find corresponding indices in the dataset
     top_matched_indices = torch.tensor(max_indices)[top_indices_from_computed.tolist()][:top_k]
-    base_filenames = [str(int(x)).zfill(5) for x in top_matched_indices]
+    base_filenames = [str(int(x)).zfill(6) for x in top_matched_indices]
     dist.print0("Top filenames in dataset: ", base_filenames)
     if captions_loc is not None:
         captions = load_captions(captions_loc)
@@ -259,6 +260,7 @@ def main(input_dir, output_dir, features_path, captions_loc, use_cls, data, max_
     with open(os.path.join(output_dir, "top_matches.json"), "w") as f:
         json.dump(state_dict, f)
     dist.print0(f"Saved top matches to json file {os.path.join(output_dir, 'top_matches.json')}")
+
 
     # load top dataset images
     top_images = [2 * ambient_utils.load_image(os.path.join(data, base_filename + ".png"), resolution=1024) - 1 for base_filename in base_filenames]
