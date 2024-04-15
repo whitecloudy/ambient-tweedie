@@ -63,47 +63,103 @@ We consider two types of corruption: additive Gaussian noise and masking. To lau
 python attack_scripts/attack_with_noise.py --whole_pipeline
 ```
 
+As this script runs, it will log the images in a wandb project. The images will be logged as triplets of (original image, one step denoised image, final denoised image). Here is an example:
+
+![](figures/example_noisy.png)
+The results are logged by default in the folder "$BASE_PATH/xl_noise_attack/".
+If the final denoised image is very close to the original image, then the model has likely seen the image during training. 
+
+After the attack is complete, you can run the following command to filter the results and find the memorized images:
+
+```bash
+python eval_scripts/filter_results_noise.py --data=$LAION_RAW_DATA --normalize=True
+```
+The script will log the top matches in a wandb project. It will further output a json file `top_matches.json` in the following format:
+```python
+state_dict = {
+    "filenames": base_filenames,  # filenames in the original dataset
+    "gen_filenames": gen_filenames,  # filenames in the dataset of generated images
+    "captions": selected_captions,  # captions of the images
+    "max_products": max_products,  # products between the generated and the original images. 
+}
+```
+
 To launch the masking attack, run the following command:
 
 ```bash
 python attack_scripts/attack_with_masking.py --mask_with_yolo
 ```
 
+Again, as this script runs, it will log the images in a wandb project. The images will be logged as triplets of (original image, masked image, reconstructed image). Here is an example:
+
+![](figures/example_masked.png)
+The results are logged by default in the folder "$BASE_PATH/xl_masking_attack/".
+If the reconstructed image is very close to the original image, then the model has likely seen the image during training. 
+
+After the attack is complete, you can run the following command to filter the results and find the memorized images:
+
+```bash
+python eval_scripts/filter_results_masking.py --data=$LAION_RAW_DATA_RESCALED --normalize=True
+```
+
+The script will log the top matches in a wandb project.
+
+
 
 ## Finetune SDXL
 
-```
-accelerate launch train_text_to_image_lora_sdxl.py --config=configs/train_low_level.yaml
+In the previous section, we showed that a pre-trained SDXL model has memorized images from its training set. 
+To reduce memorization, we are going to train diffusion models with corrupted data. If you want to understand the algorithmic innovations that enable this, see the paper [Consistent Diffusion Meets Tweedie: Training Exact Ambient Diffusion Models with Noisy Data](https://giannisdaras.github.io/publications/consistent_diffusion_meets_tweedie.pdf).
+
+
+To train a model with corrupted data on the LAION-10k dataset, run the following command:
+
+```bash
+accelerate launch train_text_to_image_lora_sdxl.py --config=configs/train_low_level_laion10k.yaml
 ```
 
-**Important**: Once the model is trained, add it to `eval_scripts/models_catalog.py`.
+**Important**: Once the model is trained, add it to a dictionary of trained models found in `eval_scripts/models_catalog.py`.
+
+You can increase the noise level in the training data by changing the `timestep_nature` parameter in the configuration file. The higher the value, the more corrupted the training data will be. The following command will run the training with a higher noise level:
+
+```bash
+accelerate launch train_text_to_image_lora_sdxl.py --config=configs/train_high_level_laion10k.yaml
+```
+
+There are a bunch of parameters that you can set in the configuration file. For example, you can change the dataset, the noise level, the consistency weight, etc.
+
 
 ## Generate images with finetuned models for FID computation
 
-```bash
-torchrun --standalone --nproc_per_node=$GPUS_PER_NODE eval_scripts/generate.py --early_stop_generation --model_key=low_noise
-```
+Once you are happy with your trained model (and you have added it on `eval_scripts/models_catalog.py`), you can use it to generate images. To generate images with the model, run the following command:
 
+```bash
+torchrun --standalone --nproc_per_node=$GPUS_PER_NODE eval_scripts/generate.py --model_key=<your_model_key>
+```
 
 
 ## Evaluation
 
-### Evaluate restoration performance
+Once the model has been finetuned on the dataset of interest, you can evaluate its performance in terms of restoration, unconditional generation FID and memorization of the training set.
+
+To evaluate restoration performance, run the following command:
+
 ```bash
 python eval_scripts/eval_denoisers.py --whole_pipeline
 ```
 
 
-### Generate images for FID computation
+To evaluate the unconditional generation performance, run the following command:
+
 ```bash
 ```
 
-### Find Nearest Neighbors
+Finally, to evaluate the memorization of the training set, run the following command to launch the attack with additive Gaussian noise:
 
-#### Noise Attack
+```bash
+```
 
-#### Inpainting Attack
+and filter the generated results with the following command:
 
-<!-- ```bash
-python filter_results_.py --input_dir=/datastor1/gdaras/sdxl_lora_full_dataset_no_noisecheckpoint-197500_25_early_stop_True/ --output_dir=$BASE_PATH/matches_no_noise --features_path=/datastor1/gdaras/ffhq_features.npy --data=$FFHQ_RAW_DATA --normalize=True
-``` -->
+```bash
+```
