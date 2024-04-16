@@ -146,30 +146,3 @@ Once you are happy with your trained model (and you have added it on `eval_scrip
 ```bash
 torchrun --standalone --nproc_per_node=$GPUS_PER_NODE eval_scripts/generate.py --model_key=<your_model_key>
 ```
-
-
-## Evaluation
-
-Once the model has been finetuned on the dataset of interest, you can evaluate its performance in terms of restoration, unconditional generation FID and memorization of the training set.
-
-To evaluate restoration performance, run the following command:
-
-```bash
-python eval_scripts/eval_denoisers.py --whole_pipeline
-```
-
-
-To evaluate the unconditional generation performance, run the following command:
-
-```bash
-```
-
-Finally, to evaluate the memorization of the training set, run the following command to launch the attack with additive Gaussian noise:
-
-```bash
-```
-
-and filter the generated results with the following command:
-
-```bash
-```
