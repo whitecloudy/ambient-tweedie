@@ -8,13 +8,4 @@ models = {
         "ckpt_path": None,  # add local checkpoint path
         "desc": "SDXL vanilla model.",
     },
-    # TODO(@giannisdaras): Remove this model
-    "low_noise": {
-        "dataset_size": "full",
-        "consistency": False,
-        "trained_with_lora": True,
-        "timestep_nature": 0,
-        "ckpt_path": "/datastor1/gdaras/sdxl_lora_full_dataset_no_noise/",
-        "desc": "Model trained with low-noise.",
-    },
 }
