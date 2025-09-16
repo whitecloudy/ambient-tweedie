@@ -52,7 +52,7 @@ pip install gdown invisible_watermark transformers accelerate safetensors datase
 The experiments in the paper used a subset of the LAION-10k dataset and the FFHQ dataset. You can download all the datasets by running the following script:
 
 ```bash
-source util_scrips/download_datasets.sh
+source util_scripts/download_datasets.sh
 ```
 This command will take a few minutes to complete.
 
